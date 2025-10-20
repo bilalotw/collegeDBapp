@@ -8,7 +8,7 @@ public class MainDashboard extends JFrame {
 
     public MainDashboard() {
         setTitle("College Management Dashboard");
-        setSize(900, 900);
+        setSize(900, 800);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());

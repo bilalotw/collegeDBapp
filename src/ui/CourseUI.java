@@ -8,6 +8,8 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.mongodb.client.model.Filters.eq;
 
@@ -15,12 +17,26 @@ public class CourseUI extends JPanel {
 
     private final MongoCollection<Document> collection;
     private DefaultTableModel model;
-    private JTextField idField, nameField, semField, creditsField, facultyField;
+    private JTextField idField, nameField, semField, creditsField;
+    private JComboBox<String> facultyCombo;
+    private JLabel facultyNameLabel;
+    private Map<String, String> facultyMap;
     private JTable table;
 
     public CourseUI() {
         MongoDatabase db = DBConnection.getDatabase();
         collection = db.getCollection("courses");
+
+        facultyCombo = new JComboBox<>();
+        facultyNameLabel = new JLabel("");
+        facultyMap = new HashMap<>();
+        loadFacultyForCombo();
+
+        facultyCombo.addActionListener(e -> {
+            String selectedId = (String) facultyCombo.getSelectedItem();
+            String name = facultyMap.getOrDefault(selectedId, "");
+            facultyNameLabel.setText(name);
+        });
 
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -85,13 +101,30 @@ public class CourseUI extends JPanel {
         nameField = createStyledTextField();
         semField = createStyledTextField();
         creditsField = createStyledTextField();
-        facultyField = createStyledTextField();
 
         addFormField(fieldsPanel, "Course ID:", idField, gbc, 0);
         addFormField(fieldsPanel, "Course Name:", nameField, gbc, 1);
         addFormField(fieldsPanel, "Semester:", semField, gbc, 2);
         addFormField(fieldsPanel, "Credits:", creditsField, gbc, 3);
-        addFormField(fieldsPanel, "Faculty ID:", facultyField, gbc, 4);
+
+        // Faculty Combo and Name Label in one row - two columns for input
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.weightx = 0.0;
+        gbc.gridwidth = 1;
+        JLabel facultyLabel = new JLabel("Faculty ID:");
+        facultyLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        fieldsPanel.add(facultyLabel, gbc);
+
+        JPanel facultyPanel = new JPanel(new BorderLayout(5, 0));
+        facultyPanel.setBackground(Color.WHITE);
+        facultyPanel.add(facultyCombo, BorderLayout.WEST);
+        facultyPanel.add(facultyNameLabel, BorderLayout.CENTER);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.gridwidth = 1;
+        fieldsPanel.add(facultyPanel, gbc);
 
         mainPanel.add(fieldsPanel, BorderLayout.CENTER);
 
@@ -140,7 +173,10 @@ public class CourseUI extends JPanel {
         updBtn.addActionListener(e -> updateCourse());
         delBtn.addActionListener(e -> deleteCourse());
         clearBtn.addActionListener(e -> clearFields());
-        refBtn.addActionListener(e -> loadCourses());
+        refBtn.addActionListener(e -> {
+            loadCourses();
+            loadFacultyForCombo();
+        });
 
         panel.add(addBtn);
         panel.add(updBtn);
@@ -160,11 +196,12 @@ public class CourseUI extends JPanel {
         button.setBorderPainted(false);
         button.setPreferredSize(new Dimension(120, 35));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        
+
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 button.setBackground(bgColor.darker());
             }
+
             public void mouseExited(java.awt.event.MouseEvent evt) {
                 button.setBackground(bgColor);
             }
@@ -225,7 +262,9 @@ public class CourseUI extends JPanel {
         nameField.setText(model.getValueAt(row, 1).toString());
         semField.setText(model.getValueAt(row, 2).toString());
         creditsField.setText(model.getValueAt(row, 3).toString());
-        facultyField.setText(model.getValueAt(row, 4).toString());
+        String facultyId = model.getValueAt(row, 4).toString();
+        facultyCombo.setSelectedItem(facultyId);
+        facultyNameLabel.setText(facultyMap.getOrDefault(facultyId, ""));
     }
 
     private void clearFields() {
@@ -233,7 +272,8 @@ public class CourseUI extends JPanel {
         nameField.setText("");
         semField.setText("");
         creditsField.setText("");
-        facultyField.setText("");
+        facultyCombo.setSelectedIndex(-1);
+        facultyNameLabel.setText("");
         table.clearSelection();
     }
 
@@ -243,7 +283,7 @@ public class CourseUI extends JPanel {
                     .append("name", nameField.getText().trim())
                     .append("semester", semField.getText().trim())
                     .append("credits", creditsField.getText().trim())
-                    .append("faculty_id", facultyField.getText().trim());
+                    .append("faculty_id", (String) facultyCombo.getSelectedItem());
             collection.insertOne(doc);
             JOptionPane.showMessageDialog(this, "Course added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
@@ -262,7 +302,7 @@ public class CourseUI extends JPanel {
                             .append("name", nameField.getText().trim())
                             .append("semester", semField.getText().trim())
                             .append("credits", creditsField.getText().trim())
-                            .append("faculty_id", facultyField.getText().trim())));
+                            .append("faculty_id", (String) facultyCombo.getSelectedItem())));
             JOptionPane.showMessageDialog(this, "Course updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
             loadCourses();
@@ -274,9 +314,9 @@ public class CourseUI extends JPanel {
             JOptionPane.showMessageDialog(this, "Please select a course to delete!", "Warning", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int confirm = JOptionPane.showConfirmDialog(this, 
-                "Are you sure you want to delete this course?", 
-                "Confirm Delete", 
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to delete this course?",
+                "Confirm Delete",
                 JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             collection.deleteOne(eq("id", idField.getText().trim()));
@@ -287,11 +327,11 @@ public class CourseUI extends JPanel {
     }
 
     private boolean validateFields() {
-        if (idField.getText().trim().isEmpty() || 
-            nameField.getText().trim().isEmpty() || 
-            semField.getText().trim().isEmpty() || 
-            creditsField.getText().trim().isEmpty() || 
-            facultyField.getText().trim().isEmpty()) {
+        if (idField.getText().trim().isEmpty()
+                || nameField.getText().trim().isEmpty()
+                || semField.getText().trim().isEmpty()
+                || creditsField.getText().trim().isEmpty()
+                || facultyCombo.getSelectedIndex() == -1) {
             JOptionPane.showMessageDialog(this, "Please fill all fields!", "Validation Error", JOptionPane.ERROR_MESSAGE);
             return false;
         }
@@ -302,12 +342,26 @@ public class CourseUI extends JPanel {
         model.setRowCount(0);
         for (Document d : collection.find()) {
             model.addRow(new Object[]{
-                d.getString("id"), 
+                d.getString("id"),
                 d.getString("name"),
-                d.getString("semester"), 
+                d.getString("semester"),
                 d.getString("credits"),
                 d.getString("faculty_id")
             });
         }
+    }
+
+    private void loadFacultyForCombo() {
+        facultyCombo.removeAllItems();
+        facultyMap.clear();
+        MongoCollection<Document> facultyCollection = DBConnection.getDatabase().getCollection("faculty");
+        for (Document doc : facultyCollection.find()) {
+            String id = doc.getString("id");
+            String name = doc.getString("name");
+            facultyCombo.addItem(id);
+            facultyMap.put(id, name);
+        }
+        facultyCombo.setSelectedIndex(-1);
+        facultyNameLabel.setText("");
     }
 }

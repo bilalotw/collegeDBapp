@@ -3,6 +3,7 @@ package ui;
 import db.DBConnection;
 import com.mongodb.client.*;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -18,6 +19,11 @@ public class StudentUI extends JPanel {
     private JTextField rollField, nameField, deptField, semField, emailField;
     private JTable table;
 
+    private JTextField searchField;
+    private JComboBox<String> searchByCombo;
+    private JComboBox<String> deptSortCombo;
+    private JComboBox<String> deptCombo;
+
     public StudentUI() {
         MongoDatabase db = DBConnection.getDatabase();
         collection = db.getCollection("students");
@@ -29,6 +35,26 @@ public class StudentUI extends JPanel {
         // Title Panel
         JPanel titlePanel = createTitlePanel();
         add(titlePanel, BorderLayout.NORTH);
+
+        // Search and Sort Panel
+        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
+        filterPanel.setBackground(Color.WHITE);
+
+        searchField = createStyledTextField();
+        searchField.setPreferredSize(new Dimension(200, 30));
+        filterPanel.add(searchField);
+
+        searchByCombo = new JComboBox<>(new String[]{"Name", "Roll"});
+        filterPanel.add(searchByCombo);
+
+        deptSortCombo = new JComboBox<>(new String[]{"All Departments", "Sort by Dept ASC", "Sort by Dept DESC"});
+        filterPanel.add(deptSortCombo);
+
+        JButton searchBtn = createStyledButton("Search", new Color(33, 150, 243));
+        searchBtn.addActionListener(e -> searchAndSortStudents());
+        filterPanel.add(searchBtn);
+
+        add(filterPanel, BorderLayout.PAGE_START);
 
         // Main Content Panel (Form + Table)
         JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
@@ -83,13 +109,14 @@ public class StudentUI extends JPanel {
 
         rollField = createStyledTextField();
         nameField = createStyledTextField();
-        deptField = createStyledTextField();
+        deptCombo = new JComboBox<>();
+        loadDepartments();  // populate combo box
         semField = createStyledTextField();
         emailField = createStyledTextField();
 
         addFormField(fieldsPanel, "Roll Number:", rollField, gbc, 0);
         addFormField(fieldsPanel, "Student Name:", nameField, gbc, 1);
-        addFormField(fieldsPanel, "Department:", deptField, gbc, 2);
+        addFormField(fieldsPanel, "Department:", deptCombo, gbc, 2);
         addFormField(fieldsPanel, "Semester:", semField, gbc, 3);
         addFormField(fieldsPanel, "Email:", emailField, gbc, 4);
 
@@ -102,7 +129,7 @@ public class StudentUI extends JPanel {
         return mainPanel;
     }
 
-    private void addFormField(JPanel panel, String labelText, JTextField field, GridBagConstraints gbc, int row) {
+    private void addFormField(JPanel panel, String labelText, JComponent component, GridBagConstraints gbc, int row) {
         gbc.gridx = 0;
         gbc.gridy = row;
         gbc.weightx = 0.0;
@@ -113,7 +140,7 @@ public class StudentUI extends JPanel {
 
         gbc.gridx = 1;
         gbc.weightx = 1.0;
-        panel.add(field, gbc);
+        panel.add(component, gbc);
     }
 
     private JTextField createStyledTextField() {
@@ -140,7 +167,10 @@ public class StudentUI extends JPanel {
         updBtn.addActionListener(e -> updateStudent());
         delBtn.addActionListener(e -> deleteStudent());
         clearBtn.addActionListener(e -> clearFields());
-        refBtn.addActionListener(e -> loadStudents());
+        refBtn.addActionListener(e -> {
+            loadStudents();
+            loadDepartments();
+        });
 
         panel.add(addBtn);
         panel.add(updBtn);
@@ -224,7 +254,7 @@ public class StudentUI extends JPanel {
     private void populateFields(int row) {
         rollField.setText(model.getValueAt(row, 0).toString());
         nameField.setText(model.getValueAt(row, 1).toString());
-        deptField.setText(model.getValueAt(row, 2).toString());
+        deptCombo.setSelectedItem(model.getValueAt(row, 2).toString());
         semField.setText(model.getValueAt(row, 3).toString());
         emailField.setText(model.getValueAt(row, 4).toString());
     }
@@ -232,7 +262,7 @@ public class StudentUI extends JPanel {
     private void clearFields() {
         rollField.setText("");
         nameField.setText("");
-        deptField.setText("");
+        deptCombo.setSelectedIndex(-1);
         semField.setText("");
         emailField.setText("");
         table.clearSelection();
@@ -242,9 +272,10 @@ public class StudentUI extends JPanel {
         if (validateFields()) {
             Document doc = new Document("roll", rollField.getText().trim())
                     .append("name", nameField.getText().trim())
-                    .append("dept", deptField.getText().trim())
+                    .append("dept", (String) deptCombo.getSelectedItem())
                     .append("semester", semField.getText().trim())
                     .append("email", emailField.getText().trim());
+
             collection.insertOne(doc);
             JOptionPane.showMessageDialog(this, "Student added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
@@ -260,7 +291,7 @@ public class StudentUI extends JPanel {
         if (validateFields()) {
             collection.updateOne(eq("roll", rollField.getText().trim()),
                     new Document("$set", new Document("name", nameField.getText().trim())
-                            .append("dept", deptField.getText().trim())
+                            .append("dept", (String) deptCombo.getSelectedItem())
                             .append("semester", semField.getText().trim())
                             .append("email", emailField.getText().trim())));
             JOptionPane.showMessageDialog(this, "Student updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
@@ -301,6 +332,57 @@ public class StudentUI extends JPanel {
     private void loadStudents() {
         model.setRowCount(0);
         for (Document d : collection.find()) {
+            Object semester = d.get("semester");
+            String semesterStr = semester == null ? "" : semester.toString();
+            model.addRow(new Object[]{
+                d.getString("roll"),
+                d.getString("name"),
+                d.getString("dept"),
+                semesterStr,
+                d.getString("email")
+            });
+        }
+    }
+
+    private void loadDepartments() {
+        deptCombo.removeAllItems();
+        MongoCollection<Document> deptCollection = DBConnection.getDatabase().getCollection("departments");
+        for (Document doc : deptCollection.find()) {
+            String deptCode = doc.getString("name");
+            deptCombo.addItem(deptCode);
+        }
+    }
+
+    private void searchAndSortStudents() {
+        String keyword = searchField.getText().trim();
+        String searchBy = (String) searchByCombo.getSelectedItem();
+        String deptSortOrder = (String) deptSortCombo.getSelectedItem();
+
+        Bson filter = new Document();
+        if (!keyword.isEmpty()) {
+            if ("Name".equals(searchBy)) {
+                filter = eq("name", keyword);
+            } else if ("Roll".equals(searchBy)) {
+                filter = eq("roll", keyword);
+            }
+        }
+
+        Bson sort = null;
+        if ("Sort by Dept ASC".equals(deptSortOrder)) {
+            sort = new Document("dept", 1);
+        } else if ("Sort by Dept DESC".equals(deptSortOrder)) {
+            sort = new Document("dept", -1);
+        }
+
+        model.setRowCount(0);
+        FindIterable<Document> results;
+        if (sort != null) {
+            results = collection.find(filter).sort(sort);
+        } else {
+            results = collection.find(filter);
+        }
+
+        for (Document d : results) {
             Object semester = d.get("semester");
             String semesterStr = semester == null ? "" : semester.toString();
             model.addRow(new Object[]{

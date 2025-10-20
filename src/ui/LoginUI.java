@@ -22,7 +22,7 @@ public class LoginUI extends JFrame {
         adminCollection = db.getCollection("admins");
 
         setTitle("Admin Login - College DB");
-        setSize(400, 250);
+        setSize(600, 300);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -78,9 +78,7 @@ public class LoginUI extends JFrame {
     private void verifyLogin() {
         String user = userField.getText();
         String pass = new String(passField.getPassword());
-
         Document admin = adminCollection.find(eq("username", user)).first();
-
         if (admin != null && admin.getString("password").equals(pass)) {
             JOptionPane.showMessageDialog(this, "Login successful!");
             dispose();
@@ -89,4 +87,11 @@ public class LoginUI extends JFrame {
             JOptionPane.showMessageDialog(this, "Invalid credentials!");
         }
     }
+    // private void verifyLogin() {
+    //     // Debug: automatically log in
+    //     JOptionPane.showMessageDialog(this, "Debug login successful!");
+    //     dispose();
+    //     new MainDashboard().setVisible(true);
+    // }
+
 }

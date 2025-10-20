@@ -15,12 +15,16 @@ public class FacultyUI extends JPanel {
 
     private final MongoCollection<Document> collection;
     private DefaultTableModel model;
-    private JTextField idField, nameField, deptField, subjectField;
+    private JTextField idField, nameField, subjectField;
+    private JComboBox<String> deptCombo;
     private JTable table;
 
     public FacultyUI() {
         MongoDatabase db = DBConnection.getDatabase();
         collection = db.getCollection("faculty");
+
+        deptCombo = new JComboBox<>();
+        loadDepartments();
 
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -83,12 +87,11 @@ public class FacultyUI extends JPanel {
 
         idField = createStyledTextField();
         nameField = createStyledTextField();
-        deptField = createStyledTextField();
         subjectField = createStyledTextField();
 
         addFormField(fieldsPanel, "Faculty ID:", idField, gbc, 0);
         addFormField(fieldsPanel, "Faculty Name:", nameField, gbc, 1);
-        addFormField(fieldsPanel, "Department:", deptField, gbc, 2);
+        addFormField(fieldsPanel, "Department:", deptCombo, gbc, 2);
         addFormField(fieldsPanel, "Subject:", subjectField, gbc, 3);
 
         mainPanel.add(fieldsPanel, BorderLayout.CENTER);
@@ -100,7 +103,7 @@ public class FacultyUI extends JPanel {
         return mainPanel;
     }
 
-    private void addFormField(JPanel panel, String labelText, JTextField field, GridBagConstraints gbc, int row) {
+    private void addFormField(JPanel panel, String labelText, JComponent component, GridBagConstraints gbc, int row) {
         gbc.gridx = 0;
         gbc.gridy = row;
         gbc.weightx = 0.0;
@@ -111,7 +114,7 @@ public class FacultyUI extends JPanel {
 
         gbc.gridx = 1;
         gbc.weightx = 1.0;
-        panel.add(field, gbc);
+        panel.add(component, gbc);
     }
 
     private JTextField createStyledTextField() {
@@ -138,7 +141,10 @@ public class FacultyUI extends JPanel {
         updBtn.addActionListener(e -> updateFaculty());
         delBtn.addActionListener(e -> deleteFaculty());
         clearBtn.addActionListener(e -> clearFields());
-        refBtn.addActionListener(e -> loadFaculty());
+        refBtn.addActionListener(e -> {
+            loadFaculty();
+            loadDepartments();
+        });
 
         panel.add(addBtn);
         panel.add(updBtn);
@@ -222,14 +228,14 @@ public class FacultyUI extends JPanel {
     private void populateFields(int row) {
         idField.setText(model.getValueAt(row, 0).toString());
         nameField.setText(model.getValueAt(row, 1).toString());
-        deptField.setText(model.getValueAt(row, 2).toString());
+        deptCombo.setSelectedItem(model.getValueAt(row, 2).toString());
         subjectField.setText(model.getValueAt(row, 3).toString());
     }
 
     private void clearFields() {
         idField.setText("");
         nameField.setText("");
-        deptField.setText("");
+        deptCombo.setSelectedIndex(-1);
         subjectField.setText("");
         table.clearSelection();
     }
@@ -238,7 +244,7 @@ public class FacultyUI extends JPanel {
         if (validateFields()) {
             Document doc = new Document("id", idField.getText().trim())
                     .append("name", nameField.getText().trim())
-                    .append("dept", deptField.getText().trim())
+                    .append("dept", (String) deptCombo.getSelectedItem())
                     .append("subject", subjectField.getText().trim());
             collection.insertOne(doc);
             JOptionPane.showMessageDialog(this, "Faculty added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
@@ -256,7 +262,7 @@ public class FacultyUI extends JPanel {
             collection.updateOne(eq("id", idField.getText().trim()),
                     new Document("$set", new Document()
                             .append("name", nameField.getText().trim())
-                            .append("dept", deptField.getText().trim())
+                            .append("dept", (String) deptCombo.getSelectedItem())
                             .append("subject", subjectField.getText().trim())));
             JOptionPane.showMessageDialog(this, "Faculty updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
@@ -284,7 +290,7 @@ public class FacultyUI extends JPanel {
     private boolean validateFields() {
         if (idField.getText().trim().isEmpty()
                 || nameField.getText().trim().isEmpty()
-                || deptField.getText().trim().isEmpty()
+                || deptCombo.getSelectedItem() == null
                 || subjectField.getText().trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please fill all fields!", "Validation Error", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -302,5 +308,15 @@ public class FacultyUI extends JPanel {
                 d.getString("subject")
             });
         }
+    }
+
+    private void loadDepartments() {
+        deptCombo.removeAllItems();
+        MongoCollection<Document> deptCollection = DBConnection.getDatabase().getCollection("departments");
+        for (Document doc : deptCollection.find()) {
+            String deptCode = doc.getString("name");
+            deptCombo.addItem(deptCode);
+        }
+        deptCombo.setSelectedIndex(-1);
     }
 }
